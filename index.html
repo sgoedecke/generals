@@ -39,6 +39,21 @@
             transform: translate(-50%, -50%);
             z-index: 1000;
         }
+        .reset-button {
+            background: #333;
+            color: #e0e0e0;
+            border: 2px solid #444;
+            padding: 12px 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 20px;
+        }
+        .reset-button:hover {
+            background: #444;
+            border-color: #ffdd44;
+        }
         .command-section {
             text-align: center;
         }
@@ -93,6 +108,36 @@
     </div>
 
     <script>
+        // Session management
+        let sessionId = null;
+
+        async function initializeSession() {
+            // Check if we have a session stored
+            sessionId = localStorage.getItem('generals-session-id');
+            
+            if (!sessionId) {
+                const response = await fetch('/create-session', { method: 'POST' });
+                const data = await response.json();
+                sessionId = data.sessionId;
+                localStorage.setItem('generals-session-id', sessionId);
+            }
+        }
+
+        function getStateUrl() {
+            return `/state/${sessionId}`;
+        }
+
+        function getOrderUrl() {
+            return `/order/${sessionId}`;
+        }
+
+        function getChatUrl() {
+            return `/chat/${sessionId}`;
+        }
+
+        function getResetUrl() {
+            return `/reset/${sessionId}`;
+        }
         function generateAsciiGrid(gameState) {
             const GRID_SIZE = 20;
             let grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(null));
@@ -154,7 +199,7 @@
 
         async function fetchGameState() {
             try {
-                const response = await fetch('/state');
+                const response = await fetch(getStateUrl());
                 if (!response.ok) throw new Error('Network response was not ok');
                 const gameState = await response.json();
                 
@@ -168,7 +213,12 @@
             // Update winner display
             const winnerDisplay = document.getElementById('winnerDisplay');
             if (gameState.winner) {
-                winnerDisplay.innerHTML = `<div class="winner">${gameState.winner.toUpperCase()} WINS!</div>`;
+                winnerDisplay.innerHTML = `
+                    <div class="winner">
+                        ${gameState.winner.toUpperCase()} WINS!
+                        <br>
+                        <button class="reset-button" onclick="resetGame()">Start New Game</button>
+                    </div>`;
             } else {
                 winnerDisplay.innerHTML = '';
             }
@@ -235,7 +285,7 @@
                 target: { x: targetX, y: targetY }
             };
             
-            fetch('/order', {
+            fetch(getOrderUrl(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -263,7 +313,7 @@
             
             try {
                 // Get current game state
-                const stateResponse = await fetch('/state');
+                const stateResponse = await fetch(getStateUrl());
                 const gameState = await stateResponse.json();
                 
                 // Prepare chat request with game state
@@ -278,7 +328,7 @@
                 };
                 
                 // Send chat request
-                const chatResponse = await fetch('/chat', {
+                const chatResponse = await fetch(getChatUrl(), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -321,7 +371,7 @@
                                 }
                                 
                                 if (moveOrder) {
-                                    const orderResponse = await fetch('/order', {
+                                    const orderResponse = await fetch(getOrderUrl(), {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json'
@@ -357,9 +407,30 @@
             }
         });
 
-        // Initialize
-        fetchGameState(); // Initial load
-        setInterval(fetchGameState, 500); // Auto-refresh every 500ms
+        // Reset game function
+        async function resetGame() {
+            try {
+                const response = await fetch(getResetUrl(), { method: 'POST' });
+                if (response.ok) {
+                    // Immediately fetch new game state
+                    fetchGameState();
+                } else {
+                    console.error('Failed to reset game');
+                }
+            } catch (error) {
+                console.error('Error resetting game:', error);
+            }
+        }
+
+        // Initialize session and start game
+        async function initialize() {
+            await initializeSession();
+            fetchGameState(); // Initial load
+            setInterval(fetchGameState, 500); // Auto-refresh every 500ms
+        }
+
+        // Start when page loads
+        initialize();
     </script>
     </div>
 </body>

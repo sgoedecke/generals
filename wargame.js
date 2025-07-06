@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const app = express();
 app.use(express.json());
 app.use(express.static('.'));
@@ -8,6 +9,13 @@ const GRID_SIZE = 20;
 const UNITS_PER_SIDE = 5;
 const INITIAL_HP = 10;
 const TICK_INTERVAL = 1000; // ms
+const ACTIVITY_TIMEOUT = 10 * 1000; // 10 seconds
+const SESSION_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+// Session management
+const gameSessions = new Map(); // sessionId -> gameState
+const sessionActivity = new Map(); // sessionId -> lastActivityTime
+const activeGames = new Set(); // Track which games should tick
 
 // Utilities
 function rollDice() {
@@ -63,15 +71,50 @@ function initialGameState() {
     return { units, cities, mountains, winner: null, turn: 0, events: [] };
 }
 
-let state = initialGameState();
+// Session management functions
+function createSession() {
+    const sessionId = crypto.randomUUID();
+    gameSessions.set(sessionId, initialGameState());
+    sessionActivity.set(sessionId, Date.now());
+    activeGames.add(sessionId);
+    return sessionId;
+}
+
+function updateGameActivity(sessionId) {
+    sessionActivity.set(sessionId, Date.now());
+    activeGames.add(sessionId);
+}
+
+function checkGameActivity() {
+    const now = Date.now();
+    for (const [sessionId, lastActivity] of sessionActivity.entries()) {
+        if (now - lastActivity > ACTIVITY_TIMEOUT) {
+            activeGames.delete(sessionId);
+        }
+    }
+}
+
+function cleanupOldSessions() {
+    const now = Date.now();
+    for (const [sessionId, lastActivity] of sessionActivity.entries()) {
+        if (now - lastActivity > SESSION_MAX_AGE) {
+            gameSessions.delete(sessionId);
+            sessionActivity.delete(sessionId);
+            activeGames.delete(sessionId);
+        }
+    }
+}
+
+// Remove global state
+// let state = initialGameState();
 
 // === GAME LOGIC ===
 
-function isMountain(x, y) {
-    return state.mountains.some(mountain => mountain.x === x && mountain.y === y);
+function isMountain(x, y, gameState) {
+    return gameState.mountains.some(mountain => mountain.x === x && mountain.y === y);
 }
 
-function moveUnit(unit, order) {
+function moveUnit(unit, order, gameState) {
     if (!order || unit.hp <= 0) return;
     if (order.action === "move") {
         let [dx, dy] = DIRS[order.direction];
@@ -79,11 +122,11 @@ function moveUnit(unit, order) {
         let nextY = unit.y + dy;
         if (nextX >= 0 && nextX < GRID_SIZE && nextY >= 0 && nextY < GRID_SIZE) {
             // Check if position is a mountain
-            if (isMountain(nextX, nextY)) {
+            if (isMountain(nextX, nextY, gameState)) {
                 // Can't move through mountains, but still consume the order
             } else {
                 // Check if position is occupied
-                const occupyingUnit = state.units.find(u => u.hp > 0 && u !== unit && u.x === nextX && u.y === nextY);
+                const occupyingUnit = gameState.units.find(u => u.hp > 0 && u !== unit && u.x === nextX && u.y === nextY);
                 if (occupyingUnit) {
                     // If enemy unit, do combat but don't move
                     if (occupyingUnit.side !== unit.side) {
@@ -97,18 +140,18 @@ function moveUnit(unit, order) {
                         
                         // Track damage events
                         if (oldHp1 > unit.hp) {
-                            state.events.push({ type: 'damage', x: unit.x, y: unit.y, unit: unit.id });
+                            gameState.events.push({ type: 'damage', x: unit.x, y: unit.y, unit: unit.id });
                         }
                         if (oldHp2 > occupyingUnit.hp) {
-                            state.events.push({ type: 'damage', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
+                            gameState.events.push({ type: 'damage', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
                         }
                         
                         // Track kill events
                         if (unit.hp === 0) {
-                            state.events.push({ type: 'kill', x: unit.x, y: unit.y, unit: unit.id });
+                            gameState.events.push({ type: 'kill', x: unit.x, y: unit.y, unit: unit.id });
                         }
                         if (occupyingUnit.hp === 0) {
-                            state.events.push({ type: 'kill', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
+                            gameState.events.push({ type: 'kill', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
                         }
                     }
                     // Don't move, but still consume the order
@@ -133,12 +176,12 @@ function moveUnit(unit, order) {
             let nextY = unit.y + dy;
             if (nextX >= 0 && nextX < GRID_SIZE && nextY >= 0 && nextY < GRID_SIZE) {
                 // Check if position is a mountain
-                if (isMountain(nextX, nextY)) {
+                if (isMountain(nextX, nextY, gameState)) {
                     // Can't move through mountains, clear the order
                     unit.orderQueue.shift();
                 } else {
                     // Check if position is occupied
-                    const occupyingUnit = state.units.find(u => u.hp > 0 && u !== unit && u.x === nextX && u.y === nextY);
+                    const occupyingUnit = gameState.units.find(u => u.hp > 0 && u !== unit && u.x === nextX && u.y === nextY);
                     if (occupyingUnit) {
                         // If enemy unit, do combat but don't move
                         if (occupyingUnit.side !== unit.side) {
@@ -152,18 +195,18 @@ function moveUnit(unit, order) {
                             
                             // Track damage events
                             if (oldHp1 > unit.hp) {
-                                state.events.push({ type: 'damage', x: unit.x, y: unit.y, unit: unit.id });
+                                gameState.events.push({ type: 'damage', x: unit.x, y: unit.y, unit: unit.id });
                             }
                             if (oldHp2 > occupyingUnit.hp) {
-                                state.events.push({ type: 'damage', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
+                                gameState.events.push({ type: 'damage', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
                             }
                             
                             // Track kill events
                             if (unit.hp === 0) {
-                                state.events.push({ type: 'kill', x: unit.x, y: unit.y, unit: unit.id });
+                                gameState.events.push({ type: 'kill', x: unit.x, y: unit.y, unit: unit.id });
                             }
                             if (occupyingUnit.hp === 0) {
-                                state.events.push({ type: 'kill', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
+                                gameState.events.push({ type: 'kill', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
                             }
                         }
                         // Don't move, but continue trying to reach target
@@ -185,36 +228,42 @@ function moveUnit(unit, order) {
     }
 }
 
-function processTurn() {
-    if (state.winner) return;
+function processTurn(gameState) {
+    if (gameState.winner) return;
     // 1. Move all units according to standing orders
-    for (let unit of state.units) {
+    for (let unit of gameState.units) {
         if (unit.hp > 0 && unit.orderQueue.length > 0) {
-            moveUnit(unit, unit.orderQueue[0]);
+            moveUnit(unit, unit.orderQueue[0], gameState);
         }
     }
     // 2. City capture (no collision handling needed since units can't stack)
-    for (let city of state.cities) {
-        for (let unit of state.units.filter(u => u.hp > 0 && u.x === city.x && u.y === city.y && u.side !== city.side)) {
+    for (let city of gameState.cities) {
+        for (let unit of gameState.units.filter(u => u.hp > 0 && u.x === city.x && u.y === city.y && u.side !== city.side)) {
             // City captured - changes to the capturing unit's side
-            state.events.push({ type: 'capture', x: city.x, y: city.y, city: city });
+            gameState.events.push({ type: 'capture', x: city.x, y: city.y, city: city });
             city.side = unit.side;
         }
     }
     // 3. Check win condition
-    let blueCities = state.cities.filter(c => c.side === 'blue').length;
-    let redCities = state.cities.filter(c => c.side === 'red').length;
-    if (blueCities === 0) state.winner = 'red';
-    if (redCities === 0) state.winner = 'blue';
-    state.turn += 1;
+    let blueCities = gameState.cities.filter(c => c.side === 'blue').length;
+    let redCities = gameState.cities.filter(c => c.side === 'red').length;
+    if (blueCities === 0) gameState.winner = 'red';
+    if (redCities === 0) gameState.winner = 'blue';
+    gameState.turn += 1;
     
     // Clear events after one turn
     setTimeout(() => {
-        state.events = [];
+        gameState.events = [];
     }, TICK_INTERVAL);
 }
 
 // === API ENDPOINTS ===
+
+// Create new session
+app.post('/create-session', (req, res) => {
+    const sessionId = createSession();
+    res.json({ sessionId });
+});
 
 /**
  * Order format:
@@ -231,9 +280,16 @@ function processTurn() {
  *   target: {x: 5, y: 5}
  * }
  */
-app.post('/order', (req, res) => {
+app.post('/order/:sessionId', (req, res) => {
+    const { sessionId } = req.params;
+    const gameState = gameSessions.get(sessionId);
+    if (!gameState) return res.status(404).json({ error: 'Session not found' });
+    
+    // Update activity timestamp
+    updateGameActivity(sessionId);
+    
     const { unit, action, ...args } = req.body;
-    let u = state.units.find(u => u.id === unit && u.hp > 0);
+    let u = gameState.units.find(u => u.id === unit && u.hp > 0);
     if (!u) return res.status(400).json({ error: 'Unit not found or dead' });
     
     let newOrder = null;
@@ -251,19 +307,33 @@ app.post('/order', (req, res) => {
 });
 
 // Get current game state
-app.get('/state', (req, res) => {
-    res.json(state);
+app.get('/state/:sessionId', (req, res) => {
+    const { sessionId } = req.params;
+    const gameState = gameSessions.get(sessionId);
+    if (!gameState) return res.status(404).json({ error: 'Session not found' });
+    res.json(gameState);
 });
 
 // Reset for dev/testing
-app.post('/reset', (req, res) => {
-    state = initialGameState();
+app.post('/reset/:sessionId', (req, res) => {
+    const { sessionId } = req.params;
+    if (!gameSessions.has(sessionId)) return res.status(404).json({ error: 'Session not found' });
+    
+    gameSessions.set(sessionId, initialGameState());
+    updateGameActivity(sessionId);
     res.json({ ok: true });
 });
 
 // OpenAI Chat proxy with game tools
-app.post('/chat', async (req, res) => {
+app.post('/chat/:sessionId', async (req, res) => {
     try {
+        const { sessionId } = req.params;
+        const gameState = gameSessions.get(sessionId);
+        if (!gameState) return res.status(404).json({ error: 'Session not found' });
+        
+        // Update activity
+        updateGameActivity(sessionId);
+        
         const githubToken = process.env.GITHUB_TOKEN;
         if (!githubToken) {
             return res.status(500).json({ error: 'GITHUB_TOKEN environment variable not set' });
@@ -315,7 +385,7 @@ app.post('/chat', async (req, res) => {
         }
 
         // Get current game state for the request
-        const currentGameState = req.body.gameState || state;
+        const currentGameState = req.body.gameState || gameState;
         const asciiMap = renderAscii(currentGameState);
         const helpers = buildHelpers(currentGameState);
 
@@ -437,9 +507,20 @@ When ready, call the tool "issue_orders" **once** with an array of orders.`;
 });
 
 // === START GAME LOOP ===
-setInterval(processTurn, TICK_INTERVAL);
+setInterval(() => {
+    checkGameActivity();
+    for (const sessionId of activeGames) {
+        const gameState = gameSessions.get(sessionId);
+        if (gameState && !gameState.winner) {
+            processTurn(gameState);
+        }
+    }
+}, TICK_INTERVAL);
 
-const PORT = 3000;
+// Cleanup old sessions every hour
+setInterval(cleanupOldSessions, 60 * 60 * 1000);
+
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Wargame API running on http://localhost:${PORT}`);
 });
