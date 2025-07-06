@@ -4,142 +4,174 @@
     <title>Generals</title>
     <style>
         body { 
-            font-family: monospace; 
-            background: #1a1a1a; 
+            font-family: 'Courier New', Courier, monospace; 
+            background: #0a0a0a; 
             color: #e0e0e0; 
-            padding: 20px; 
+            padding: 0;
             margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
             min-height: 100vh;
         }
         .container {
-            max-width: 1200px;
-            width: 100%;
+            max-width: 100%;
+            padding: 20px;
         }
         .header { 
-            margin-bottom: 20px; 
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #fff;
+            letter-spacing: 2px;
+        }
+        .header p {
+            margin: 5px 0 0 0;
+            color: #aaa;
+            font-size: 16px;
         }
         .grid { 
-            font-size: 14px; 
-            line-height: 1.2; 
+            font-size: 15px; 
+            line-height: 1.3; 
             white-space: pre; 
             font-family: 'Courier New', Courier, monospace;
-            margin: 20px 0;
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #444;
+            margin: 0 auto 30px auto;
+            background: #111;
+            padding: 20px;
+            border: 2px solid #333;
+            display: inline-block;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .grid-container {
+            text-align: center;
         }
         .status { 
+            text-align: center;
             margin: 20px 0; 
+            font-size: 16px;
         }
         .winner { 
-            font-size: 24px; 
+            font-size: 32px; 
             font-weight: bold;
             color: #ffdd44;
+            text-align: center;
+            margin: 20px 0;
+            text-shadow: 0 0 10px rgba(255,221,68,0.5);
         }
         .units { 
             display: flex; 
-            gap: 40px; 
-            margin: 20px 0; 
+            justify-content: center;
+            gap: 60px; 
+            margin: 30px 0; 
+        }
+        .units > div {
+            min-width: 250px;
+        }
+        .units h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
         }
         .legend { 
-            margin: 20px 0;
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #444;
+            text-align: center;
+            margin: 30px auto;
+            max-width: 600px;
+            font-size: 14px;
+            color: #ccc;
+            border-top: 1px solid #333;
+            padding-top: 20px;
         }
         .command-section {
-            margin: 20px 0;
-            padding: 15px;
-            border: 1px solid #555;
-            background: #2a2a2a;
-            border-radius: 8px;
+            text-align: center;
+            margin: 30px 0;
+            padding: 0;
         }
-        .command-section h3 {
-            margin-top: 0;
-            color: #e0e0e0;
+        .command-section form {
+            display: inline-block;
         }
         .command-section input {
-            background: #333;
+            background: #222;
             color: #e0e0e0;
-            border: 1px solid #555;
-            border-radius: 4px;
+            border: 2px solid #444;
+            padding: 12px 16px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            width: 500px;
+            margin-right: 10px;
+        }
+        .command-section input:focus {
+            outline: none;
+            border-color: #4da6ff;
+            box-shadow: 0 0 5px rgba(77,166,255,0.3);
         }
         .command-section button {
-            background: #4a4a4a;
+            background: #333;
             color: #e0e0e0;
-            border: 1px solid #666;
-            border-radius: 4px;
+            border: 2px solid #444;
+            padding: 12px 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
         .command-section button:hover {
-            background: #5a5a5a;
+            background: #444;
+            border-color: #4da6ff;
         }
-        .api-info {
-            margin-top: 40px;
-            padding: 20px;
-            border: 1px solid #555;
-            background: #2a2a2a;
-            border-radius: 8px;
+        #commandStatus {
+            margin-top: 15px; 
+            font-style: italic; 
+            color: #aaa;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-    <div class="header">
-        <h1>Generals</h1>
-        <p>Turn: <span id="turnNumber">0</span></p>
-    </div>
-    
-    <div id="winnerDisplay"></div>
-    
-    <div class="grid" id="gameGrid">Loading...</div>
-
-    
-    <div class="command-section">
-        <form id="commandForm">
-            <input type="text" id="commandInput" placeholder="Enter command for blue units (e.g., 'Defend the blue cities')" style="width: 400px; padding: 8px; margin-right: 10px;">
-            <button type="submit" style="padding: 8px 15px;">Execute</button>
-        </form>
-        <div id="commandStatus" style="margin-top: 10px; font-style: italic; color: #aaa;"></div>
-    </div>
-
-
-    <div class="status" id="cityStatus">
-        <strong>Cities Remaining:</strong><br>
-        Blue: - | Red: -
-    </div>
-
-
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    
-    <div class="legend">
-        <strong>Legend:</strong><br>
-        B0-B4 = Blue units | r0-r4 = Red units<br>
-        C = Blue cities | c = Red cities | ^ = Mountains | . = Empty
-    </div>
-    
-    <div class="units" id="unitsDisplay">
-        <div>
-            <h3>Blue Forces</h3>
-            <div id="blueUnits">Loading...</div>
+        <div class="header">
+            <h1>GENERALS</h1>
+            <p>Turn: <span id="turnNumber">0</span></p>
         </div>
-        <div>
-            <h3>Red Forces</h3>
-            <div id="redUnits">Loading...</div>
+        
+        <div id="winnerDisplay"></div>
+        
+        <div class="grid-container">
+            <div class="grid" id="gameGrid">Loading...</div>
+        </div>
+
+        <div class="command-section">
+            <form id="commandForm">
+                <input type="text" id="commandInput" placeholder="Enter command for blue units (e.g., 'Defend the blue cities')">
+                <button type="submit">Execute</button>
+            </form>
+            <div id="commandStatus"></div>
+        </div>
+
+        <div class="status" id="cityStatus">
+            <strong>Cities Remaining:</strong><br>
+            Blue: - | Red: -
+        </div>
+
+        <div class="units" id="unitsDisplay">
+            <div>
+                <h3>Blue Forces</h3>
+                <div id="blueUnits">Loading...</div>
+            </div>
+            <div>
+                <h3>Red Forces</h3>
+                <div id="redUnits">Loading...</div>
+            </div>
+        </div>
+        
+        <div class="legend">
+            <strong>Legend:</strong><br>
+            B0-B4 = Blue units | r0-r4 = Red units<br>
+            C = Blue cities | c = Red cities | ^ = Mountains | . = Empty
         </div>
     </div>
-    
 
     <script>
         function generateAsciiGrid(gameState) {
