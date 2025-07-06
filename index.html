@@ -1,14 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Wargame Battle Grid</title>
+    <title>Generals</title>
     <style>
         body { 
             font-family: monospace; 
-            background: white; 
-            color: black; 
+            background: #1a1a1a; 
+            color: #e0e0e0; 
             padding: 20px; 
             margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            width: 100%;
         }
         .header { 
             margin-bottom: 20px; 
@@ -19,13 +27,18 @@
             white-space: pre; 
             font-family: 'Courier New', Courier, monospace;
             margin: 20px 0;
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
         }
         .status { 
             margin: 20px 0; 
         }
         .winner { 
             font-size: 24px; 
-            font-weight: bold; 
+            font-weight: bold;
+            color: #ffdd44;
         }
         .units { 
             display: flex; 
@@ -33,46 +46,87 @@
             margin: 20px 0; 
         }
         .legend { 
-            margin: 20px 0; 
+            margin: 20px 0;
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
         }
         .command-section {
             margin: 20px 0;
             padding: 15px;
-            border: 1px solid #ccc;
-            background: #f9f9f9;
+            border: 1px solid #555;
+            background: #2a2a2a;
+            border-radius: 8px;
         }
         .command-section h3 {
             margin-top: 0;
+            color: #e0e0e0;
+        }
+        .command-section input {
+            background: #333;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+        .command-section button {
+            background: #4a4a4a;
+            color: #e0e0e0;
+            border: 1px solid #666;
+            border-radius: 4px;
+        }
+        .command-section button:hover {
+            background: #5a5a5a;
         }
         .api-info {
             margin-top: 40px;
             padding: 20px;
-            border: 1px solid #ccc;
+            border: 1px solid #555;
+            background: #2a2a2a;
+            border-radius: 8px;
         }
     </style>
 </head>
 <body>
+    <div class="container">
     <div class="header">
-        <h1>Wargame Battle Grid</h1>
+        <h1>Generals</h1>
         <p>Turn: <span id="turnNumber">0</span></p>
     </div>
     
     <div id="winnerDisplay"></div>
     
     <div class="grid" id="gameGrid">Loading...</div>
+
+    
+    <div class="command-section">
+        <form id="commandForm">
+            <input type="text" id="commandInput" placeholder="Enter command for blue units (e.g., 'Defend the blue cities')" style="width: 400px; padding: 8px; margin-right: 10px;">
+            <button type="submit" style="padding: 8px 15px;">Execute</button>
+        </form>
+        <div id="commandStatus" style="margin-top: 10px; font-style: italic; color: #aaa;"></div>
+    </div>
+
+
+    <div class="status" id="cityStatus">
+        <strong>Cities Remaining:</strong><br>
+        Blue: - | Red: -
+    </div>
+
+
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
     
     <div class="legend">
         <strong>Legend:</strong><br>
         B0-B4 = Blue units | r0-r4 = Red units<br>
         C = Blue cities | c = Red cities | ^ = Mountains | . = Empty
-    </div>
-    
-    <div class="command-section">
-        <form id="commandForm">
-            <input type="text" id="commandInput" placeholder="Enter command for blue units (e.g., 'Move B0 south 3 tiles')" style="width: 400px; padding: 8px; margin-right: 10px;">
-            <button type="submit" style="padding: 8px 15px;">Execute</button>
-        </form>
-        <div id="commandStatus" style="margin-top: 10px; font-style: italic; color: #666;"></div>
     </div>
     
     <div class="units" id="unitsDisplay">
@@ -86,10 +140,6 @@
         </div>
     </div>
     
-    <div class="status" id="cityStatus">
-        <strong>Cities Remaining:</strong><br>
-        Blue: - | Red: -
-    </div>
 
     <script>
         function generateAsciiGrid(gameState) {
@@ -99,20 +149,20 @@
             // Initialize with dots
             for(let r=0; r<GRID_SIZE; r++) {
                 for(let c=0; c<GRID_SIZE; c++) {
-                    grid[r][c] = `<span style="color: lightgrey">.  </span>`;
+                    grid[r][c] = `<span style="color: #444">.  </span>`;
                 }
             }
 
             // Place mountains
             if (gameState.mountains) {
                 for (let mountain of gameState.mountains) {
-                    grid[mountain.y][mountain.x] = `<span style="color: black">^  </span>`;
+                    grid[mountain.y][mountain.x] = `<span style="color: #bbb; font-weight: bold;">^  </span>`;
                 }
             }
             
             // Place cities
             for (let city of gameState.cities) {
-                const color = city.side === 'blue' ? 'blue' : 'red';
+                const color = city.side === 'blue' ? '#4da6ff' : 'red';
                 const symbol = city.side === 'blue' ? 'C' : 'c';
                 grid[city.y][city.x] = `<span style="color: ${color}">${symbol.padEnd(3, ' ')}</span>`;
             }
@@ -120,7 +170,7 @@
             // Place units (units override cities on display)
             for (let unit of gameState.units.filter(u => u.hp > 0)) {
                 let symbol = unit.side === 'blue' ? unit.id : unit.id.toLowerCase();
-                const color = unit.side === 'blue' ? 'blue' : 'red';
+                const color = unit.side === 'blue' ? '#4da6ff' : 'red';
                 
                 // Check if this unit took damage this turn
                 const damageEvent = gameState.events && gameState.events.find(e => 
@@ -197,7 +247,7 @@
                             orderText += ` [+${u.orderQueue.length - 1} queued]`;
                         }
                     }
-                    return `<span style="color: blue">${u.id}: HP ${u.hp} at (${u.x},${u.y})${orderText}</span>`;
+                    return `<span style="color: #4da6ff">${u.id}: HP ${u.hp} at (${u.x},${u.y})${orderText}</span>`;
                 })
                 .join('<br>') || 'No units remaining';
                 
@@ -232,7 +282,7 @@
         // Enemy AI System
         let aiEnabled = true;
         let lastAiMoveTime = 0;
-        const AI_MOVE_INTERVAL = 3000; // 3 seconds between moves
+        const AI_MOVE_INTERVAL = 10000; // 10 seconds between moves
 
         function executeEnemyAI(gameState) {
             if (!aiEnabled || gameState.winner) return;
@@ -315,22 +365,10 @@
                 const stateResponse = await fetch('/state');
                 const gameState = await stateResponse.json();
                 
-                // Prepare chat request with game context
+                // Prepare chat request with game state
                 const chatRequest = {
+                    gameState: gameState,  // Pass game state to server for prompt generation
                     messages: [
-                        {
-                            role: "system",
-                            content: `You are controlling the blue team in a wargame. Current game state: Turn ${gameState.turn}. 
-                            Blue units: ${gameState.units.filter(u => u.side === 'blue' && u.hp > 0).map(u => `${u.id} at (${u.x},${u.y}) HP:${u.hp}`).join(', ')}.
-                            Red units: ${gameState.units.filter(u => u.side === 'red' && u.hp > 0).map(u => `${u.id} at (${u.x},${u.y}) HP:${u.hp}`).join(', ')}.
-                            Blue cities: ${gameState.cities.filter(c => c.side === 'blue').map(c => `(${c.x},${c.y})`).join(', ')}.
-                            Red cities: ${gameState.cities.filter(c => c.side === 'red').map(c => `(${c.x},${c.y})`).join(', ')}.
-                            Mountains: ${gameState.mountains.map(m => `(${m.x},${m.y})`).join(', ')}.
-                            Grid size: 20x20 (0-19 coordinates). Use the available tools to execute the user's command.
-                            You can issue multiple move orders in a single command, including to the same unit multiple times (e.g. to move in a particular pattern).
-                            If your unit moves into a city, it will attack and capture that city. If your unit moves into another unit's position, it will attack that unit and they will both lose HP. Units cannot move through mountains.
-                            'In front of a city' in this context means in between the city and the red team's units.`,
-                        },
                         {
                             role: "user",
                             content: command
@@ -359,46 +397,40 @@
                     let executedMoves = 0;
                     
                     for (const toolCall of toolCalls) {
-                        if (toolCall.type === 'function') {
-                            const functionName = toolCall.function.name;
+                        if (toolCall.type === 'function' && toolCall.function.name === 'issue_orders') {
                             const args = JSON.parse(toolCall.function.arguments);
                             
-                            if (functionName === 'move_unit_direction') {
-                                const moveOrder = {
-                                    unit: args.unit,
-                                    action: 'move',
-                                    direction: args.direction,
-                                    tiles: args.tiles
-                                };
+                            // Process each order in the orders array
+                            for (const order of args.orders) {
+                                let moveOrder;
                                 
-                                const orderResponse = await fetch('/order', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify(moveOrder)
-                                });
-                                
-                                if (orderResponse.ok) {
-                                    executedMoves++;
+                                if (order.action === 'move') {
+                                    moveOrder = {
+                                        unit: order.unit,
+                                        action: 'move',
+                                        direction: order.direction,
+                                        tiles: order.tiles
+                                    };
+                                } else if (order.action === 'move_to') {
+                                    moveOrder = {
+                                        unit: order.unit,
+                                        action: 'move_to',
+                                        target: order.target
+                                    };
                                 }
-                            } else if (functionName === 'move_unit_to_position') {
-                                const moveOrder = {
-                                    unit: args.unit,
-                                    action: 'move_to',
-                                    target: { x: args.x, y: args.y }
-                                };
                                 
-                                const orderResponse = await fetch('/order', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify(moveOrder)
-                                });
-                                
-                                if (orderResponse.ok) {
-                                    executedMoves++;
+                                if (moveOrder) {
+                                    const orderResponse = await fetch('/order', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify(moveOrder)
+                                    });
+                                    
+                                    if (orderResponse.ok) {
+                                        executedMoves++;
+                                    }
                                 }
                             }
                         }
@@ -428,5 +460,6 @@
         fetchGameState(); // Initial load
         setInterval(fetchGameState, 500); // Auto-refresh every 500ms
     </script>
+    </div>
 </body>
 </html>

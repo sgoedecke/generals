@@ -277,85 +277,141 @@ app.post('/chat', async (req, res) => {
             return res.status(500).json({ error: 'GITHUB_TOKEN environment variable not set' });
         }
 
-        // Define tools that match game moves
+        // Helper functions for prompt generation
+        function renderAscii(gameState) {
+            const GRID_SIZE = 20;
+            let grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill('.'));
+
+            // Place mountains
+            if (gameState.mountains) {
+                for (let mountain of gameState.mountains) {
+                    grid[mountain.y][mountain.x] = '^';
+                }
+            }
+            
+            // Place cities
+            for (let city of gameState.cities) {
+                const symbol = city.side === 'blue' ? 'C' : 'c';
+                grid[city.y][city.x] = symbol;
+            }
+            
+            // Place units (units override cities on display)
+            for (let unit of gameState.units.filter(u => u.hp > 0)) {
+                let symbol = unit.side === 'blue' ? unit.id : unit.id.toLowerCase();
+                grid[unit.y][unit.x] = symbol;
+            }
+            
+            // Add row numbers and return formatted string
+            return grid.map((row, i) => 
+                `${i.toString().padStart(2, ' ')} ${row.join('')}`
+            ).join('\n') + '\n   ' + Array.from({length: GRID_SIZE}, (_, i) => i % 10).join('');
+        }
+
+        function buildHelpers(gameState) {
+            const blueUnits = gameState.units.filter(u => u.side === 'blue' && u.hp > 0);
+            const redUnits = gameState.units.filter(u => u.side === 'red' && u.hp > 0);
+            const blueCities = gameState.cities.filter(c => c.side === 'blue');
+            const redCities = gameState.cities.filter(c => c.side === 'red');
+
+            return {
+                blueUnits: blueUnits.map(u => `${u.id}:(${u.x},${u.y}) HP:${u.hp}`).join(', '),
+                redUnits: redUnits.map(u => `${u.id}:(${u.x},${u.y}) HP:${u.hp}`).join(', '),
+                blueCities: blueCities.map(c => `(${c.x},${c.y})`).join(', '),
+                redCities: redCities.map(c => `(${c.x},${c.y})`).join(', '),
+                mountains: gameState.mountains.map(m => `(${m.x},${m.y})`).join(', ')
+            };
+        }
+
+        // Get current game state for the request
+        const currentGameState = req.body.gameState || state;
+        const asciiMap = renderAscii(currentGameState);
+        const helpers = buildHelpers(currentGameState);
+
+        const systemMsg = `You are the AI commander of the blue team (coordinate system: (0,0) top-left).
+
+MAP
+${asciiMap}
+
+ENTITY COORDINATES
+Blue units: ${helpers.blueUnits}
+Red units: ${helpers.redUnits}
+Blue cities: ${helpers.blueCities}
+Red cities: ${helpers.redCities}
+Mountains: ${helpers.mountains}
+
+RULES
+- Units move N/E/S/W one tile per turn; mountains (^) block movement.
+- Entering an enemy city captures it. Entering an enemy unit's tile damages both.
+- Blue wins by capturing all red cities or eliminating all red units.
+- You can queue multiple orders per unit for sequential execution.
+
+THINKING
+Silently think step-by-step. **Do not send your thoughts.**
+When ready, call the tool "issue_orders" **once** with an array of orders.`;
+
+        // Define single tool for issuing orders
         const tools = [
             {
                 type: "function",
                 function: {
-                    name: "move_unit_direction",
-                    description: "Move a unit in a specific direction for a number of tiles",
+                    name: "issue_orders",
+                    description: "Issue movement orders for blue units",
                     parameters: {
                         type: "object",
                         properties: {
-                            unit: {
-                                type: "string",
-                                description: "Unit ID (B0-B4 for Blue, R0-R4 for Red)",
-                                enum: ["B0", "B1", "B2", "B3", "B4", "R0", "R1", "R2", "R3", "R4"]
-                            },
-                            direction: {
-                                type: "string",
-                                description: "Direction to move (n=north, s=south, e=east, w=west)",
-                                enum: ["n", "s", "e", "w"]
-                            },
-                            tiles: {
-                                type: "integer",
-                                description: "Number of tiles to move (1-20)",
-                                minimum: 1,
-                                maximum: 20
+                            orders: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        unit: {
+                                            type: "string",
+                                            description: "Unit ID (B0-B4)",
+                                            enum: ["B0", "B1", "B2", "B3", "B4"]
+                                        },
+                                        action: {
+                                            type: "string",
+                                            description: "Type of movement",
+                                            enum: ["move", "move_to"]
+                                        },
+                                        direction: {
+                                            type: "string",
+                                            description: "Direction to move (for 'move' action)",
+                                            enum: ["n", "s", "e", "w"]
+                                        },
+                                        tiles: {
+                                            type: "integer",
+                                            description: "Number of tiles to move (for 'move' action)",
+                                            minimum: 1,
+                                            maximum: 20
+                                        },
+                                        target: {
+                                            type: "object",
+                                            description: "Target coordinates (for 'move_to' action)",
+                                            properties: {
+                                                x: { type: "integer", minimum: 0, maximum: 19 },
+                                                y: { type: "integer", minimum: 0, maximum: 19 }
+                                            },
+                                            required: ["x", "y"]
+                                        }
+                                    },
+                                    required: ["unit", "action"]
+                                }
                             }
                         },
-                        required: ["unit", "direction", "tiles"]
+                        required: ["orders"]
                     }
                 }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "move_unit_to_position",
-                    description: "Move a unit to a specific coordinate position. The pathfinding is very basic and does not handle collisions. Use a series of move_unit_direction calls if you want to move around an object",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            unit: {
-                                type: "string",
-                                description: "Unit ID (B0-B4 for Blue, R0-R4 for Red)",
-                                enum: ["B0", "B1", "B2", "B3", "B4", "R0", "R1", "R2", "R3", "R4"]
-                            },
-                            x: {
-                                type: "integer",
-                                description: "Target X coordinate (0-19)",
-                                minimum: 0,
-                                maximum: 19
-                            },
-                            y: {
-                                type: "integer",
-                                description: "Target Y coordinate (0-19)",
-                                minimum: 0,
-                                maximum: 19
-                            }
-                        },
-                        required: ["unit", "x", "y"]
-                    }
-                }
-            },
-            // {
-            //     type: "function",
-            //     function: {
-            //         name: "get_game_state",
-            //         description: "Get the current game state including all units, cities, and turn information",
-            //         parameters: {
-            //             type: "object",
-            //             properties: {},
-            //             required: []
-            //         }
-            //     }
-            // }
+            }
         ];
 
-        // Prepare the request body with tools
+        // Prepare the request body with the new system message
         const requestBody = {
-            model: "openai/gpt-4o",
-            messages: req.body.messages || [],
+            model: "openai/gpt-4.1",
+            messages: [
+                { role: "system", content: systemMsg },
+                ...(req.body.messages || []).filter(m => m.role !== "system")
+            ],
             tools: tools,
             tool_choice: "auto"
         };
