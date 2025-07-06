@@ -51,7 +51,6 @@ function initialGameState() {
     
     // Segment 1: A jagged line from (2,9) to (8,9)
     for (let x = 2; x <= 8; x++) {
-        mountains.push({ x, y: 9 });
         if (x % 3 === 0) mountains.push({ x, y: 8 }); // Jagged peak
         if (x % 2 === 0) mountains.push({ x, y: 10 }); // Jagged valley
     }
@@ -60,15 +59,8 @@ function initialGameState() {
     mountains.push({ x: 4, y: 8 });
     mountains.push({ x: 4, y: 11 });
     mountains.push({ x: 5, y: 11 });
-
-    // Segment 3: Another jagged line further right, from (12,10) to (17,10)
-    for (let x = 12; x <= 17; x++) {
-        mountains.push({ x, y: 10 });
-        if (x % 2 !== 0) mountains.push({ x, y: 11 }); // Jagged valley
-        if (x % 4 === 0) mountains.push({ x, y: 9 }); // Jagged peak
-    }
     
-    return { units, cities, mountains, winner: null, turn: 0 };
+    return { units, cities, mountains, winner: null, turn: 0, events: [] };
 }
 
 let state = initialGameState();
@@ -106,8 +98,26 @@ function moveUnit(unit, order) {
                         // Both units take damage
                         let loss1 = rollDice();
                         let loss2 = rollDice();
+                        let oldHp1 = unit.hp;
+                        let oldHp2 = occupyingUnit.hp;
                         unit.hp = Math.max(0, unit.hp - loss1);
                         occupyingUnit.hp = Math.max(0, occupyingUnit.hp - loss2);
+                        
+                        // Track damage events
+                        if (oldHp1 > unit.hp) {
+                            state.events.push({ type: 'damage', x: unit.x, y: unit.y, unit: unit.id });
+                        }
+                        if (oldHp2 > occupyingUnit.hp) {
+                            state.events.push({ type: 'damage', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
+                        }
+                        
+                        // Track kill events
+                        if (unit.hp === 0) {
+                            state.events.push({ type: 'kill', x: unit.x, y: unit.y, unit: unit.id });
+                        }
+                        if (occupyingUnit.hp === 0) {
+                            state.events.push({ type: 'kill', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
+                        }
                     }
                     // Don't move, but still consume the order
                 } else {
@@ -143,8 +153,26 @@ function moveUnit(unit, order) {
                             // Both units take damage
                             let loss1 = rollDice();
                             let loss2 = rollDice();
+                            let oldHp1 = unit.hp;
+                            let oldHp2 = occupyingUnit.hp;
                             unit.hp = Math.max(0, unit.hp - loss1);
                             occupyingUnit.hp = Math.max(0, occupyingUnit.hp - loss2);
+                            
+                            // Track damage events
+                            if (oldHp1 > unit.hp) {
+                                state.events.push({ type: 'damage', x: unit.x, y: unit.y, unit: unit.id });
+                            }
+                            if (oldHp2 > occupyingUnit.hp) {
+                                state.events.push({ type: 'damage', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
+                            }
+                            
+                            // Track kill events
+                            if (unit.hp === 0) {
+                                state.events.push({ type: 'kill', x: unit.x, y: unit.y, unit: unit.id });
+                            }
+                            if (occupyingUnit.hp === 0) {
+                                state.events.push({ type: 'kill', x: occupyingUnit.x, y: occupyingUnit.y, unit: occupyingUnit.id });
+                            }
                         }
                         // Don't move, but continue trying to reach target
                     } else {
@@ -173,12 +201,12 @@ function processTurn() {
             moveUnit(unit, unit.orderQueue[0]);
         }
     }
-    // 2. City capture/destruction (no collision handling needed since units can't stack)
-    for (let city of state.cities.slice()) {
+    // 2. City capture (no collision handling needed since units can't stack)
+    for (let city of state.cities) {
         for (let unit of state.units.filter(u => u.hp > 0 && u.x === city.x && u.y === city.y && u.side !== city.side)) {
-            // City destroyed, unit dies
-            state.cities = state.cities.filter(c => c !== city);
-            unit.hp = 0;
+            // City captured - changes to the capturing unit's side
+            state.events.push({ type: 'capture', x: city.x, y: city.y, city: city });
+            city.side = unit.side;
         }
     }
     // 3. Check win condition
@@ -187,6 +215,11 @@ function processTurn() {
     if (blueCities === 0) state.winner = 'red';
     if (redCities === 0) state.winner = 'blue';
     state.turn += 1;
+    
+    // Clear events after one turn
+    setTimeout(() => {
+        state.events = [];
+    }, TICK_INTERVAL);
 }
 
 // === API ENDPOINTS ===

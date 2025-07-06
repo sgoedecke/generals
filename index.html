@@ -121,7 +121,30 @@
             for (let unit of gameState.units.filter(u => u.hp > 0)) {
                 let symbol = unit.side === 'blue' ? unit.id : unit.id.toLowerCase();
                 const color = unit.side === 'blue' ? 'blue' : 'red';
-                grid[unit.y][unit.x] = `<span style="color: ${color}">${symbol.padEnd(3, ' ')}</span>`;
+                
+                // Check if this unit took damage this turn
+                const damageEvent = gameState.events && gameState.events.find(e => 
+                    e.type === 'damage' && e.x === unit.x && e.y === unit.y
+                );
+                const background = damageEvent ? 'background-color: lightcoral; ' : '';
+                
+                grid[unit.y][unit.x] = `<span style="color: ${color}; ${background}">${symbol.padEnd(3, ' ')}</span>`;
+            }
+            
+            // Add event overlays (stars for kills and captures)
+            if (gameState.events) {
+                for (let event of gameState.events) {
+                    if (event.type === 'kill' || event.type === 'capture') {
+                        // Show bright red star overlay
+                        const currentCell = grid[event.y][event.x];
+                        if (currentCell.includes('</span>')) {
+                            // Replace the content but keep the span structure
+                            grid[event.y][event.x] = currentCell.replace(/>[^<]*<\/span>/, `>★  </span>`).replace(/color: [^;]*;/, 'color: red; font-weight: bold;');
+                        } else {
+                            grid[event.y][event.x] = `<span style="color: red; font-weight: bold;">★  </span>`;
+                        }
+                    }
+                }
             }
             
             // Pad each cell to 3 characters for consistent spacing
@@ -201,6 +224,77 @@
             const redCities = gameState.cities.filter(c => c.side === 'red').length;
             document.getElementById('cityStatus').innerHTML = 
                 `<strong>Cities Remaining:</strong><br>Blue: ${blueCities} | Red: ${redCities}`;
+            
+            // Run enemy AI
+            executeEnemyAI(gameState);
+        }
+
+        // Enemy AI System
+        let aiEnabled = true;
+        let lastAiMoveTime = 0;
+        const AI_MOVE_INTERVAL = 3000; // 3 seconds between moves
+
+        function executeEnemyAI(gameState) {
+            if (!aiEnabled || gameState.winner) return;
+            
+            const now = Date.now();
+            if (now - lastAiMoveTime < AI_MOVE_INTERVAL) return;
+            
+            // Get alive red units
+            const redUnits = gameState.units.filter(u => u.side === 'red' && u.hp > 0);
+            if (redUnits.length === 0) return;
+            
+            // Pick a random red unit
+            const unit = redUnits[Math.floor(Math.random() * redUnits.length)];
+            
+            let targetX, targetY;
+            
+            // 10% chance to target a city, 90% chance for random/blue unit
+            if (Math.random() < 0.1) {
+                // Target a blue city if available
+                const blueCities = gameState.cities.filter(c => c.side === 'blue');
+                if (blueCities.length > 0) {
+                    const targetCity = blueCities[Math.floor(Math.random() * blueCities.length)];
+                    targetX = targetCity.x;
+                    targetY = targetCity.y;
+                } else {
+                    // No blue cities, pick random spot
+                    targetX = Math.floor(Math.random() * 20);
+                    targetY = Math.floor(Math.random() * 20);
+                }
+            } else {
+                // 50% chance to target a blue unit, 50% chance random spot
+                const blueUnits = gameState.units.filter(u => u.side === 'blue' && u.hp > 0);
+                if (blueUnits.length > 0 && Math.random() < 0.5) {
+                    // Target a blue unit
+                    const targetUnit = blueUnits[Math.floor(Math.random() * blueUnits.length)];
+                    targetX = targetUnit.x;
+                    targetY = targetUnit.y;
+                } else {
+                    // Random spot
+                    targetX = Math.floor(Math.random() * 20);
+                    targetY = Math.floor(Math.random() * 20);
+                }
+            }
+            
+            // Issue the move command
+            const moveOrder = {
+                unit: unit.id,
+                action: 'move_to',
+                target: { x: targetX, y: targetY }
+            };
+            
+            fetch('/order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(moveOrder)
+            }).catch(error => {
+                console.error('AI move error:', error);
+            });
+            
+            lastAiMoveTime = now;
         }
 
         // Command form handling
