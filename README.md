@@ -1,20 +1,12 @@
-# Wargame API
+# Generals
 
-A simple turn-based wargame API in Node.js. Two sides (Red & Blue), five units per side, fighting on a 10x10 grid. Players issue **standing orders** to their units via AI - no per-turn micromanagement. The game proceeds automatically, advancing one turn per second.
+A simple turn-based wargame in Node.js. Two sides (Red & Blue), five units per side, fighting on a 10x10 grid. The interesting thing is that players issue orders to their units via AI - no direct control. The game proceeds automatically, advancing one turn per second.
 
 This is inspired by that one HN post about realistic communication in wargames, and by the last part of Ender's Game where they shift from per-unit command to giving only strategic orders.
 
 I think this could be a pretty compelling genre. The skill of issuing sensible orders and of crafting useful system prompts both seem interesting.
 
-## Features
-
-* **10x10 grid**
-* **5 units per side**, each with 10 HP
-* **Cities**: Two per side; lose all and you lose the game
-* **Standing orders**: Tell your units to move in a direction or toward a target
-* **Automatic turns**: The game updates every second
-
-## Running the Server
+## Usage
 
 ```bash
 npm install express
@@ -23,51 +15,12 @@ GITHUB_TOKEN=$(gh auth token) node wargame.js
 
 Server runs on [http://localhost:3000](http://localhost:3000)
 
-Of course you can use any GitHub token (though if it's a PAT it needs models: read)
+Uses GitHub Models for free inference, so you can use any GitHub token (though if it's a PAT it needs models: read)
 
-## API
+## Design
 
-### Issue a Move Order
+The server is a simple API that handles the actual game logic. It has a /state endpoint and an /order endpoint (and proxies LLM inference, in case I ever want to deploy this with a real secret).
 
-**POST** `/order`
+The client is a HTML page with a bunch of JS on it to poll /state twice a second and send /order based on the LLM response.
 
-```json
-{
-  "unit": "B1",
-  "action": "move",
-  "direction": "s",
-  "tiles": 3
-}
-```
-
-Or:
-
-```json
-{
-  "unit": "B2",
-  "action": "move_to",
-  "target": { "x": 5, "y": 5 }
-}
-```
-
-### Get Current Game State
-
-**GET** `/state`
-
-Returns the full current game state (all units, cities, winner if any, turn number).
-
-### Reset the Game
-
-**POST** `/reset`
-
-Resets to the initial state.
-
-## Notes
-
-* **Unit IDs** are `"B0"`–`"B4"` for Blue, `"R0"`–`"R4"` for Red.
-* A unit can only have one standing order at a time.
-* Collisions: When units land on the same tile, all but one take HP loss (randomly resolved).
-
----
-
-Let me know if you want a usage example or want to clarify any rules!
+Right now you fight against bots that aren't LLM-powered. It would be cool to fight against another player who's also typing instructions.

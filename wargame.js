@@ -66,14 +66,6 @@ function initialGameState() {
 let state = initialGameState();
 
 // === GAME LOGIC ===
-function isPositionOccupied(x, y, excludeUnit) {
-    return state.units.some(unit => 
-        unit.hp > 0 && 
-        unit !== excludeUnit && 
-        unit.x === x && 
-        unit.y === y
-    );
-}
 
 function isMountain(x, y) {
     return state.mountains.some(mountain => mountain.x === x && mountain.y === y);
