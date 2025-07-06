@@ -1,6 +1,10 @@
 # Wargame API
 
-A simple turn-based wargame API in Node.js. Two sides (Red & Blue), five units per side, fighting on a 10x10 grid. Players issue **standing orders** to their units via API—no per-turn micromanagement. The game proceeds automatically, advancing one turn per second.
+A simple turn-based wargame API in Node.js. Two sides (Red & Blue), five units per side, fighting on a 10x10 grid. Players issue **standing orders** to their units via AI - no per-turn micromanagement. The game proceeds automatically, advancing one turn per second.
+
+This is inspired by that one HN post about realistic communication in wargames, and by the last part of Ender's Game where they shift from per-unit command to giving only strategic orders.
+
+I think this could be a pretty compelling genre. The skill of issuing sensible orders and of crafting useful system prompts both seem interesting.
 
 ## Features
 
