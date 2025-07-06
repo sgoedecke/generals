@@ -1,5 +1,15 @@
 {
+  "name": "generals",
+  "version": "1.0.0",
+  "description": "A turn-based wargame where players command units via AI",
+  "main": "wargame.js",
+  "scripts": {
+    "start": "node wargame.js"
+  },
   "dependencies": {
     "express": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
