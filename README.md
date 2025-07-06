@@ -1,5 +1,7 @@
 # Generals
 
+https://generals.up.railway.app/
+
 A simple turn-based wargame in Node.js. Two sides (Red & Blue), five units per side, fighting on a 20x20 grid. The interesting thing is that players issue orders to their units via AI - no direct control. The game proceeds automatically, advancing one turn per second.
 
 This is inspired by that one HN post about realistic communication in wargames, and by the last part of Ender's Game where they shift from per-unit command to giving only strategic orders.
